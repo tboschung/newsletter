@@ -1,0 +1,36 @@
+[[feeds]]
+name = "TechCrunch AI"
+url = "https://techcrunch.com/category/artificial-intelligence/feed/"
+category = "news"
+weight = 1.15
+
+[[feeds]]
+name = "VentureBeat AI"
+url = "https://venturebeat.com/category/ai/feed/"
+category = "news"
+weight = 1.0
+
+[[feeds]]
+name = "MIT Technology Review AI"
+url = "https://www.technologyreview.com/topic/artificial-intelligence/feed/"
+category = "news"
+weight = 1.1
+
+[[feeds]]
+name = "OpenAI News"
+url = "https://openai.com/news/rss.xml"
+category = "technology"
+weight = 1.2
+
+[[feeds]]
+name = "Google AI"
+url = "https://blog.google/technology/ai/rss/"
+category = "technology"
+weight = 1.15
+
+[[feeds]]
+name = "Hugging Face Blog"
+url = "https://huggingface.co/blog/feed.xml"
+category = "technology"
+weight = 1.1
+

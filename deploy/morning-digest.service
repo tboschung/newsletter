@@ -1,0 +1,16 @@
+[Unit]
+Description=Build and send the newsletter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=toby
+Group=toby
+WorkingDirectory=/opt/apps/newsletter
+ExecStart=/opt/apps/newsletter/.venv/bin/python /opt/apps/newsletter/main.py run
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/apps/newsletter/data

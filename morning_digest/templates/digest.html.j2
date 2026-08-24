@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>AI Newsletter</title></head>
+<body style="margin:0;background:#f3f4f6;color:#172033;font-family:Arial,sans-serif">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 10px">
+<table role="presentation" width="680" style="max-width:680px;width:100%;background:white;border-radius:12px" cellspacing="0" cellpadding="0">
+<tr><td style="padding:32px"><div style="font-size:13px;color:#637083;text-transform:uppercase;letter-spacing:1px">AI Newsletter</div>
+<h1 style="margin:8px 0 4px;font-size:30px">Your AI briefing</h1><div style="color:#637083">{{ date }} · Previous 24 hours</div></td></tr>
+<tr><td style="padding:0 32px 24px"><h2 style="font-size:19px">At a glance</h2>
+{% if digest.overview %}<ul style="padding-left:22px;line-height:1.5">{% for point in digest.overview %}<li style="margin:8px 0">{{ point }}</li>{% endfor %}</ul>
+{% else %}<p style="color:#637083">No qualifying developments found.</p>{% endif %}</td></tr>
+{% for title, entries in [('Top AI developments', digest.news), ('Technology & research', digest.technology), ('Early-career AI, ML & data jobs', digest.jobs)] %}
+<tr><td style="padding:0 32px 28px"><h2 style="font-size:21px;border-top:1px solid #e5e7eb;padding-top:24px">{{ title }}</h2>
+{% if entries %}{% for entry in entries %}<div style="margin:20px 0"><a href="{{ entry.item.url }}" style="font-weight:bold;font-size:17px;color:#2457d6;text-decoration:none">{{ entry.item.title }}</a>
+<div style="font-size:12px;color:#637083;margin:5px 0">{{ entry.item.source }} · {{ entry.item.published_at.astimezone(digest.cutoff_end.tzinfo).strftime('%H:%M') }}{% if entry.item.company %} · {{ entry.item.company }}{% endif %}{% if entry.item.location %} · {{ entry.item.location }}{% endif %}</div>
+<p style="line-height:1.5;margin:7px 0">{{ entry.summary }}</p><p style="line-height:1.45;margin:7px 0;color:#475569"><strong>Why it matters:</strong> {{ entry.why_it_matters }}</p></div>{% endfor %}
+{% else %}<p style="color:#637083">No qualifying items found in this window.</p>{% endif %}</td></tr>{% endfor %}
+<tr><td style="padding:20px 32px;background:#f8fafc;color:#637083;font-size:12px;line-height:1.5;border-radius:0 0 12px 12px">
+Generated on your Raspberry Pi{% if digest.used_fallback %} · Source excerpts used because AI summarization was unavailable{% endif %}.
+{% if digest.failed_sources %}<br>Incomplete coverage: {{ digest.failed_sources|join(', ') }} unavailable.{% endif %}
+</td></tr></table></td></tr></table></body></html>
