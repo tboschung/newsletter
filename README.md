@@ -29,7 +29,18 @@ python main.py run --dry-run
 `/etc/newsletter.env` is required and is read directly by the script. A Gemini
 API key is optional; without it, the digest uses source excerpts. An SMTP app
 password is only required when sending email. `check-config --smtp` tests Gmail
-authentication without sending.
+authentication without sending. `DIGEST_PUBLIC_URL` is required and must be the
+public base URL, including any reverse-proxy subpath. It is used for confirmation,
+management, and unsubscribe links.
+
+Send a standalone SMTP test from the repository root with:
+
+```bash
+_scripts/send-test-email.sh recipient@example.com
+```
+
+This sends a labelled multipart test message and does not write subscriber,
+token, digest, or delivery-attempt records.
 
 ## Raspberry Pi deployment
 
@@ -112,9 +123,11 @@ For a persistent local service, install `deploy/morning-digest-web.service` as
 Keep the full `ExecStart` command on one line.
 
 `GET /api/presets` returns the public preset catalog. `POST /api/subscribers`
-accepts an `email` and `preset_id` JSON object. Repeating a signup updates the
-existing address instead of creating a duplicate. Put the process behind an HTTPS
-reverse proxy before exposing it publicly.
+accepts an `email` and `preset_id` JSON object and returns a neutral `202 Accepted`
+response. The address receives a 24-hour, one-time confirmation link; opening the
+link is safe and activation requires submitting its form. Confirmation resends use
+`POST /api/subscription/confirmation/resend` and have a 10-minute cooldown. Put the
+process behind an HTTPS reverse proxy before exposing it publicly.
 
 Public presets are TOML files in `config/presets`. Web signups are stored in the
 same SQLite database used by delivery. Each record stores a preset plus an empty
@@ -122,5 +135,22 @@ same SQLite database used by delivery. Each record stores a preset plus an empty
 `content` and `job_profile` overrides, so custom per-user configuration can be
 added later without changing the table or delivery loop.
 
-The remaining subscriber-lifecycle, confirmation, unsubscribe, custom-config,
-privacy, and operational work is documented in [`NEXT_STEPS.md`](NEXT_STEPS.md).
+Only confirmed, active database subscribers receive delivery. Recipient failures
+are recorded and isolated; transient failures retry once, permanent rejections
+disable an address, and other repeated failures disable it after three failures.
+TOML subscribers remain active and supported.
+
+Each database subscriber digest contains fresh seven-day management and
+unsubscribe links. Opening either link is non-mutating. A management link is
+consumed to create a 30-minute secure session; preset changes then apply
+immediately and require CSRF validation. Unsubscribe requires an explicit POST,
+is idempotent, and leaves the address as a suppression record. Resubscription
+returns the address to pending and sends a fresh ownership confirmation. TOML
+subscribers do not receive web-management links.
+
+Archived digest bodies are rendered before credentials are generated, so the
+SQLite history contains no management or unsubscribe tokens. Delivery messages
+also include standard one-click `List-Unsubscribe` headers.
+
+Custom overrides, retention, backups, administration, and remaining operational
+work are documented in [`NEXT_STEPS.md`](NEXT_STEPS.md).

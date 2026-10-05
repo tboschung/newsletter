@@ -10,12 +10,13 @@ from .models import Digest
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
 
-def render(digest: Digest) -> tuple[str, str, str]:
+def render(digest: Digest, *, manage_url: str = "", unsubscribe_url: str = "") -> tuple[str, str, str]:
     env = Environment(autoescape=select_autoescape(("html", "xml")), trim_blocks=True, lstrip_blocks=True)
     html_template = env.from_string((TEMPLATE_DIR / "digest.html.j2").read_text(encoding="utf-8"))
     text_template = Environment(trim_blocks=True, lstrip_blocks=True).from_string(
         (TEMPLATE_DIR / "digest.txt.j2").read_text(encoding="utf-8")
     )
-    context = {"digest": digest, "date": digest.cutoff_end.strftime("%A, %d %B %Y")}
+    context = {"digest": digest, "date": digest.cutoff_end.strftime("%A, %d %B %Y"),
+               "manage_url": manage_url, "unsubscribe_url": unsubscribe_url}
     subject = f"AI Newsletter — {digest.cutoff_end:%d %b %Y}"
     return subject, html_template.render(**context), text_template.render(**context)

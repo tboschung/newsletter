@@ -190,6 +190,7 @@ class Settings:
     engines: tuple[EngineConfig, ...]
     subscribers: tuple[Subscriber, ...]
     presets: tuple[Preset, ...]
+    public_url: str = ""
 
     @classmethod
     def load(cls, engine_file: str | None = None) -> "Settings":
@@ -204,6 +205,11 @@ class Settings:
         engine_names = [engine.name for engine in engines]
         if len(engine_names) != len(set(engine_names)):
             raise ValueError(f"duplicate engine names configured: {engine_names}")
+        public_url = config.get("DIGEST_PUBLIC_URL", "").rstrip("/")
+        if not public_url:
+            raise ValueError("DIGEST_PUBLIC_URL is required")
+        if not public_url.startswith(("http://", "https://")):
+            raise ValueError("DIGEST_PUBLIC_URL must be an absolute HTTP(S) URL")
         return cls(
             database_path=Path(config.get("DIGEST_DATABASE", "data/digest.sqlite3")),
             output_dir=Path(config.get("DIGEST_OUTPUT_DIR", "data/previews")),
@@ -216,4 +222,5 @@ class Settings:
             engines=engines,
             subscribers=load_subscribers(subscribers_dir, config),
             presets=load_presets(presets_dir),
+            public_url=public_url,
         )

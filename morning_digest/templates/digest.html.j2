@@ -19,4 +19,5 @@
 <tr><td style="padding:20px 32px;background:#f8fafc;color:#637083;font-size:12px;line-height:1.5;border-radius:0 0 12px 12px">
 Generated on your Raspberry Pi{% if digest.used_fallback %} · Source excerpts used because AI summarization was unavailable{% endif %}.
 {% if digest.failed_sources %}<br>Incomplete coverage: {{ digest.failed_sources|join(', ') }} unavailable.{% endif %}
+{% if manage_url and unsubscribe_url %}<br><a href="{{ manage_url }}">Manage preferences</a> · <a href="{{ unsubscribe_url }}">Unsubscribe</a>{% endif %}
 </td></tr></table></td></tr></table></body></html>

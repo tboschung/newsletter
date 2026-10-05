@@ -46,10 +46,13 @@ def test_signup_api_lists_presets_and_creates_subscriber(tmp_path: Path):
             "/api/subscribers",
             payload={"email": "reader@example.com", "preset_id": "brief"},
         )
-        assert status == 201
-        assert result["status"] == "subscribed"
+        assert status == 202
+        assert result["status"] == "pending"
         storage = Storage(settings.database_path)
-        assert storage.active_subscribers()[0][1:3] == ("reader@example.com", "brief")
+        assert storage.active_subscribers() == []
+        subscriber = storage.connection.execute("SELECT * FROM subscribers").fetchone()
+        assert subscriber["email"] == "reader@example.com"
+        assert subscriber["status"] == "pending"
         storage.close()
     finally:
         server.shutdown()

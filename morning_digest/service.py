@@ -5,11 +5,12 @@ from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlencode
 
 import httpx
 
 from .config import Settings, Subscriber, resolve_subscriber
-from .emailer import build_message, send_email
+from .emailer import build_message, classify_smtp_error, send_email
 from .engine import ContentEngine
 from .models import Digest, Item
 from .ranking import select_items
@@ -72,7 +73,9 @@ def run(settings: Settings, as_of: datetime, dry_run: bool = False) -> tuple[lis
         storage = Storage(settings.database_path)
         try:
             presets = {preset.preset_id: preset for preset in settings.presets}
+            storage.validate_preset_references(set(presets))
             configured_subscribers = list(settings.subscribers)
+            database_subscriber_ids: set[str] = set()
             for subscriber_id, email, preset_id, overrides in storage.active_subscribers():
                 preset = presets.get(preset_id)
                 if preset is None:
@@ -82,6 +85,7 @@ def run(settings: Settings, as_of: datetime, dry_run: bool = False) -> tuple[lis
                 configured_subscribers.append(
                     resolve_subscriber(subscriber_id, email, preset, overrides)
                 )
+                database_subscriber_ids.add(subscriber_id)
             subscriber_ids = [subscriber.subscriber_id for subscriber in configured_subscribers]
             if len(subscriber_ids) != len(set(subscriber_ids)):
                 raise ValueError("duplicate subscriber ids across file and database configuration")
@@ -112,6 +116,7 @@ def run(settings: Settings, as_of: datetime, dry_run: bool = False) -> tuple[lis
                 storage.upsert_item(item)
 
             sent = 0
+            failed = 0
             total_items = 0
             for subscriber in subscribers:
                 relevant_failures = [
@@ -144,21 +149,55 @@ def run(settings: Settings, as_of: datetime, dry_run: bool = False) -> tuple[lis
                     continue
                 if not settings.smtp_username or not settings.smtp_app_password:
                     raise RuntimeError("SMTP_USERNAME and SMTP_APP_PASSWORD are required to send")
-                message = build_message(
-                    subject, plain, html, settings.smtp_username, subscriber.email
-                )
-                try:
-                    send_email(message, settings.smtp_username, settings.smtp_app_password)
-                except Exception as exc:
-                    storage.mark_error(digest_id, str(exc))
-                    raise
-                storage.mark_delivered(digest_id)
-                sent += 1
+                unsubscribe_post_url = ""
+                if subscriber.subscriber_id in database_subscriber_ids:
+                    management_token, unsubscribe_token = storage.create_delivery_tokens(subscriber.subscriber_id)
+                    base = settings.public_url.rstrip("/")
+                    manage_url = f"{base}/manage?{urlencode({'token': management_token})}"
+                    unsubscribe_url = f"{base}/unsubscribe?{urlencode({'token': unsubscribe_token})}"
+                    unsubscribe_post_url = f"{base}/api/subscription/unsubscribe?{urlencode({'token': unsubscribe_token})}"
+                    _, delivery_html, delivery_plain = render(digest, manage_url=manage_url, unsubscribe_url=unsubscribe_url)
+                else:
+                    delivery_html, delivery_plain = html, plain
+                message = build_message(subject, delivery_plain, delivery_html, settings.smtp_username,
+                                        subscriber.email, unsubscribe_url=unsubscribe_post_url)
+                for attempt in range(2):
+                    try:
+                        message_id = send_email(
+                            message, settings.smtp_username, settings.smtp_app_password
+                        )
+                        storage.delivery_succeeded(subscriber.subscriber_id, digest_id, message_id)
+                        sent += 1
+                        break
+                    except Exception as exc:
+                        category, permanent, global_failure = classify_smtp_error(exc)
+                        if global_failure:
+                            storage.record_delivery_attempt(
+                                subscriber.subscriber_id, digest_id, "failed", category, str(exc)
+                            )
+                            storage.mark_error(digest_id, str(exc))
+                            raise
+                        transient = category == "recipient_transient"
+                        if transient and attempt == 0:
+                            storage.record_delivery_attempt(
+                                subscriber.subscriber_id, digest_id, "retry", category, str(exc)
+                            )
+                            continue
+                        storage.delivery_failed(
+                            subscriber.subscriber_id, digest_id, category, str(exc),
+                            permanent=permanent,
+                        )
+                        failed += 1
+                        break
 
             if dry_run:
                 return previews, (
                     f"Generated {len(previews)} subscriber preview(s) with "
                     f"{total_items} total selected item(s)."
+                )
+            if failed:
+                raise RuntimeError(
+                    f"Sent {sent} subscriber digest(s); {failed} recipient(s) failed after processing the batch."
                 )
             return [], f"Sent {sent} subscriber digest(s) with {total_items} total selected item(s)."
         finally:

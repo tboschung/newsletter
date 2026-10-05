@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from morning_digest.models import Item
 from morning_digest.storage import Storage
@@ -70,4 +70,38 @@ def test_web_subscriber_signup_is_idempotent_and_keeps_override_slot(tmp_path):
     assert second["preset_id"] == "full-signal"
     active = storage.active_subscribers()
     assert active == [(second["id"], "READER@example.com", "full-signal", {})]
+    storage.close()
+
+
+def test_confirmation_is_hashed_one_time_and_activates_pending_subscriber(tmp_path):
+    storage = Storage(tmp_path / "db.sqlite")
+    now = datetime(2026, 8, 12, 6, tzinfo=timezone.utc)
+    subscriber, token = storage.request_confirmation("reader@example.com", "ai-briefing", now=now)
+
+    assert subscriber["status"] == "pending"
+    assert token is not None
+    stored = storage.connection.execute("SELECT token_hash FROM subscriber_tokens").fetchone()[0]
+    assert stored != token
+    assert storage.confirm(token, now=now + timedelta(minutes=1))
+    assert not storage.confirm(token, now=now + timedelta(minutes=2))
+    assert storage.active_subscribers()[0][2] == "ai-briefing"
+    storage.close()
+
+
+def test_active_preset_change_waits_for_confirmation_and_resend_cools_down(tmp_path):
+    storage = Storage(tmp_path / "db.sqlite")
+    now = datetime(2026, 8, 12, 6, tzinfo=timezone.utc)
+    _, first = storage.request_confirmation("reader@example.com", "ai-briefing", now=now)
+    assert first and storage.confirm(first, now=now + timedelta(minutes=1))
+
+    subscriber, change = storage.request_confirmation(
+        "READER@example.com", "full-signal", now=now + timedelta(minutes=2)
+    )
+    assert subscriber["status"] == "active"
+    assert subscriber["preset_id"] == "ai-briefing"
+    assert subscriber["pending_preset_id"] == "full-signal"
+    _, resend = storage.resend_confirmation("reader@example.com", now=now + timedelta(minutes=3))
+    assert resend is None
+    assert change and storage.confirm(change, now=now + timedelta(minutes=4))
+    assert storage.active_subscribers()[0][2] == "full-signal"
     storage.close()

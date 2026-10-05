@@ -40,7 +40,9 @@ def main() -> int:
     try:
         settings = Settings.load(args.engine)
         if args.command == "check-config":
-            Storage(settings.database_path).close()
+            storage = Storage(settings.database_path)
+            try: storage.validate_preset_references({preset.preset_id for preset in settings.presets})
+            finally: storage.close()
             if args.smtp:
                 if not settings.smtp_app_password:
                     raise ValueError("SMTP_APP_PASSWORD is not set")

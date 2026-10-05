@@ -7,17 +7,34 @@ This document describes the work needed to turn the current private signup page 
 The service currently provides:
 
 - predefined TOML presets under `config/presets`;
-- `POST /api/subscribers` for creating or updating a subscriber;
+- neutral `POST /api/subscribers` signup responses;
 - one SQLite subscriber record per normalized email address;
 - `preset_id` plus a reserved `config_overrides` JSON object;
-- per-subscriber rendering and delivery tracking;
+- pending, active, unsubscribed, and disabled subscription states;
+- hashed, expiring, single-use email confirmation tokens;
+- scanner-safe confirmation through a GET page followed by a POST action;
+- confirmation resends with a 10-minute cooldown;
+- versioned, transactional SQLite migrations with WAL and a busy timeout;
+- per-subscriber delivery attempts, failure counters, and delivery tracking;
+- one transient retry and isolated recipient failures;
 - a private Caddy route protected by the existing authentication service.
 
-New signups currently become active immediately. There is no confirmation email, preference-management link, unsubscribe flow, bounce handling, or web UI for custom settings.
+Only confirmed, active database subscribers enter the delivery loop. Existing TOML
+subscribers remain active and supported. Scanner-safe unsubscribe, immediate
+preset switching, and passwordless management sessions are now implemented.
+There is not yet a web UI for custom settings.
+
+## Completed milestone
+
+Steps 1, 2, and 4 were implemented together: subscription lifecycle and explicit
+schema migrations, email ownership confirmation, and isolated recipient delivery
+failures. Existing database subscribers migrate as confirmed and active. Active
+subscribers retain their current preset until a requested change is confirmed, and
+disabled subscribers cannot reactivate themselves through signup or an old token.
 
 ## Recommended delivery order
 
-### 1. Add a proper subscription lifecycle
+### 1. Add a proper subscription lifecycle — completed
 
 Expand `subscribers.status` from `active | unsubscribed` to:
 
@@ -28,11 +45,13 @@ Expand `subscribers.status` from `active | unsubscribed` to:
 
 Add timestamps such as `confirmed_at`, `unsubscribed_at`, and `last_delivery_at`. Only `active` subscribers should enter the digest delivery loop.
 
-Do this through explicit, repeatable SQLite migrations rather than adding more ad-hoc checks during startup. Keep a schema-version table and test migration from the current database.
+This is implemented through ordered, repeatable SQLite migrations and a
+`schema_version` table. Migration covers fresh databases, the previous subscriber
+schema, and the legacy digest schema.
 
-### 2. Send confirmation email
+### 2. Send confirmation email — completed
 
-Change signup to create or update a `pending` subscriber and send a confirmation link. A practical flow is:
+Signup now creates or updates a pending confirmation and sends a confirmation link:
 
 1. The user submits an email and preset.
 2. The API always returns a neutral response so it does not reveal whether an address already exists.
@@ -42,9 +61,12 @@ Change signup to create or update a `pending` subscriber and send a confirmation
 6. Confirmation consumes the token idempotently and changes the subscriber to `active`.
 7. A new signup invalidates older unconsumed confirmation tokens.
 
-Use separate HTML and plain-text confirmation templates. Do not place the token in logs, analytics, toast messages, or the database in plaintext. Add a resend endpoint with a cooldown.
+Separate HTML and plain-text templates are used. `DIGEST_PUBLIC_URL` supplies the
+absolute base URL, including an optional proxy subpath. Token pages use
+`Cache-Control: no-store`, query strings are redacted from request logs, and the
+resend endpoint enforces a 10-minute cooldown.
 
-### 3. Add unsubscribe support before broader use
+### 3. Add unsubscribe support before broader use — completed
 
 Every digest should contain a visible preference and unsubscribe link. Use another random, scoped token rather than exposing the subscriber ID or email.
 
@@ -59,9 +81,10 @@ The unsubscribe page should show a confirmation screen before changing state, be
 
 Also add standard `List-Unsubscribe` and `List-Unsubscribe-Post` headers when building messages. Test the complete flow from a rendered digest rather than testing the API alone.
 
-### 4. Isolate delivery failures per subscriber
+### 4. Isolate delivery failures per subscriber — completed
 
-The current delivery loop stops when one email send raises an exception. Change it so one failed recipient is recorded and processing continues for the remaining subscribers.
+The delivery loop records a failed recipient and continues with the remaining
+subscribers.
 
 Track at least:
 
@@ -71,9 +94,13 @@ Track at least:
 - last successful delivery;
 - provider message ID when available.
 
-Classify permanent failures separately from transient SMTP errors. Retry transient failures with a bounded policy. Disable an address only after a defined permanent failure or repeated failures, and record why.
+Permanent recipient failures are classified separately from transient errors.
+Transient failures retry once. A permanent rejection or three consecutive failures
+disables a database subscriber, while success resets the counter. Authentication
+and configuration failures abort immediately; other failures are reported after the
+remaining recipients have been processed.
 
-### 5. Provide preset management
+### 5. Provide preset management — completed (basic presets)
 
 Presets should remain version-controlled TOML files and continue to describe shared defaults. Add a stable `version` field if changing a preset should be distinguishable from the version originally selected.
 
@@ -120,7 +147,7 @@ Do not initially allow arbitrary feed URLs or adapter names. Fetching user-provi
 
 If overrides grow into complex objects or need querying, move them into normalized preference tables. The current JSON column is appropriate while the schema is small and always resolved as one object.
 
-### 7. Add passwordless preference management
+### 7. Add passwordless preference management — completed (preset scope)
 
 Full user accounts are unnecessary for the current product. A scoped, expiring management link can allow a subscriber to:
 
@@ -162,9 +189,9 @@ Add lightweight operational visibility:
 
 SQLite remains sufficient for this service while signup and delivery volume are low. Enable and test an appropriate busy timeout or WAL mode if the web API and morning delivery process regularly write concurrently.
 
-## Suggested schema additions
+## Implemented lifecycle schema
 
-The exact migration can evolve, but the next schema should include the following concepts:
+The current schema includes these lifecycle concepts:
 
 ```text
 subscribers
@@ -183,31 +210,20 @@ delivery_attempts
 
 Keep token records and delivery attempts separate from the subscriber row: they have different retention rules and there may be many of each per subscriber.
 
-## Minimum test coverage
+## Remaining minimum test coverage
 
-Add tests for:
+Lifecycle and confirmation coverage now includes duplicate signup, pending delivery
+exclusion, token hashing and one-time consumption, active preset-change confirmation,
+resend cooldown, disabled-address protection, and current/legacy schema migration.
+Lifecycle coverage now includes scanner-safe unsubscribe and resubscription,
+session and CSRF enforcement, immediate preset switching, scoped digest links,
+token-free archives, and unsubscribe headers. Remaining coverage should focus on:
 
-- duplicate signup and case-insensitive email handling;
-- pending subscribers being excluded from delivery;
-- confirmation token success, expiry, reuse, and invalidation;
-- unsubscribe idempotency and exclusion from later runs;
-- resubscription requiring confirmation;
-- preset switching without losing valid overrides;
 - invalid, unknown, and oversized overrides;
-- one subscriber's SMTP failure not blocking another;
 - concurrent signup and digest reads against SQLite;
-- management and unsubscribe links beneath the Caddy subpath;
-- plain-text and HTML emails containing correct preference links.
 
-## Practical milestone
+## Next practical milestone
 
-The next useful milestone is complete when a person can:
-
-1. choose a preset;
-2. confirm ownership of the email address;
-3. receive a digest without another subscriber's failure affecting delivery;
-4. open a protected preference page;
-5. switch presets or unsubscribe;
-6. remain excluded from all future sends after unsubscribing.
-
-Custom configuration should follow that lifecycle milestone, not precede it.
+The next useful milestone is a small, versioned custom-override schema and UI.
+Retention, backup/restore, and deliberate subscriber-administration commands
+remain pending and should follow without weakening the suppression-list behavior.
