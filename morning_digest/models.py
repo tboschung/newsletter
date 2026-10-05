@@ -40,4 +40,6 @@ class Digest:
     jobs: list[DigestEntry] = field(default_factory=list)
     failed_sources: list[str] = field(default_factory=list)
     used_fallback: bool = False
-
+    enabled_sections: frozenset[str] = field(
+        default_factory=lambda: frozenset(("news", "technology", "jobs"))
+    )

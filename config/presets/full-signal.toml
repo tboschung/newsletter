@@ -1,0 +1,5 @@
+id = "full-signal"
+name = "Full Signal"
+description = "AI news, technical releases, and relevant job opportunities."
+content = ["news", "technology", "jobs"]
+job_profile = "cv"

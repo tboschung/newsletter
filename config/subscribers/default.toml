@@ -1,0 +1,5 @@
+# Copy this file to add subscribers. Every id must be unique.
+id = "default"
+email_env = "DIGEST_RECIPIENT"
+content = ["news", "technology", "jobs"]
+job_profile = "cv"

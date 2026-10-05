@@ -1,36 +1,54 @@
-[[feeds]]
+[engine]
+name = "newsletter"
+
+[[sources]]
 name = "TechCrunch AI"
+adapter = "rss"
 url = "https://techcrunch.com/category/artificial-intelligence/feed/"
 category = "news"
 weight = 1.15
 
-[[feeds]]
+[[sources]]
 name = "VentureBeat AI"
+adapter = "rss"
 url = "https://venturebeat.com/category/ai/feed/"
 category = "news"
-weight = 1.0
 
-[[feeds]]
+[[sources]]
 name = "MIT Technology Review AI"
+adapter = "rss"
 url = "https://www.technologyreview.com/topic/artificial-intelligence/feed/"
 category = "news"
 weight = 1.1
 
-[[feeds]]
+[[sources]]
 name = "OpenAI News"
+adapter = "rss"
 url = "https://openai.com/news/rss.xml"
 category = "technology"
 weight = 1.2
 
-[[feeds]]
+[[sources]]
 name = "Google AI"
+adapter = "rss"
 url = "https://blog.google/technology/ai/rss/"
 category = "technology"
 weight = 1.15
 
-[[feeds]]
+[[sources]]
 name = "Hugging Face Blog"
+adapter = "rss"
 url = "https://huggingface.co/blog/feed.xml"
 category = "technology"
 weight = 1.1
 
+[[sources]]
+name = "Hacker News"
+adapter = "hacker_news"
+category = "news"
+
+[[sources]]
+name = "arXiv"
+adapter = "arxiv"
+category = "technology"
+weight = 1.05

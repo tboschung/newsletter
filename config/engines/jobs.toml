@@ -1,0 +1,42 @@
+[engine]
+name = "jobs"
+
+[[sources]]
+name = "Arbeitnow"
+adapter = "arbeitnow"
+category = "jobs"
+
+[[sources]]
+name = "Jobicy"
+adapter = "jobicy"
+category = "jobs"
+weight = 1.05
+
+[[sources]]
+name = "Remotive"
+adapter = "remotive"
+category = "jobs"
+weight = 1.05
+
+[[sources]]
+name = "Remote OK"
+adapter = "remote_ok"
+category = "jobs"
+
+[[sources]]
+name = "SwissAIJob"
+adapter = "swiss_ai_job"
+category = "jobs"
+weight = 1.25
+
+[[sources]]
+name = "jobs.ch"
+adapter = "jobs_ch"
+category = "jobs"
+weight = 1.15
+
+[[sources]]
+name = "SwissDevJobs"
+adapter = "swiss_dev_jobs"
+category = "jobs"
+weight = 1.2

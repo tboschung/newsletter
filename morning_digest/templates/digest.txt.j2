@@ -1,11 +1,12 @@
 AI NEWSLETTER — {{ date }}
 Previous 24 hours
 
-AT A GLANCE
+{% if 'news' in digest.enabled_sections or 'technology' in digest.enabled_sections %}AT A GLANCE
 {% if digest.overview %}{% for point in digest.overview %}- {{ point }}
 {% endfor %}{% else %}No qualifying developments found.
-{% endif %}
+{% endif %}{% endif %}
 {% for title, entries in [('TOP AI DEVELOPMENTS', digest.news), ('TECHNOLOGY & RESEARCH', digest.technology), ('EARLY-CAREER AI, ML & DATA JOBS', digest.jobs)] %}
+{% set section = ('news', 'technology', 'jobs')[loop.index0] %}{% if section in digest.enabled_sections %}
 {{ title }}
 {% if entries %}{% for entry in entries %}
 {{ entry.item.title }}
@@ -14,7 +15,7 @@ Summary: {{ entry.summary }}
 Why it matters: {{ entry.why_it_matters }}
 {{ entry.item.url }}
 {% endfor %}{% else %}No qualifying items found in this window.
-{% endif %}
+{% endif %}{% endif %}
 {% endfor %}
 Generated on your Raspberry Pi{% if digest.used_fallback %}; source excerpts used because AI summarization was unavailable{% endif %}.
 {% if digest.failed_sources %}Incomplete coverage: {{ digest.failed_sources|join(', ') }} unavailable.{% endif %}

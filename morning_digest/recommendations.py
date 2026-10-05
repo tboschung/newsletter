@@ -42,7 +42,7 @@ def _lines(path: Path) -> tuple[str, ...]:
 
 def load_recommendation_profile(root: Path, mode: str) -> RecommendationProfile:
     if mode not in {"cv", "specification"}:
-        raise ValueError("JOB_RECOMMENDATION_MODE must be 'cv' or 'specification'")
+        raise ValueError("job profile must be 'cv' or 'specification'")
     directory = root / mode
     values = {name.removesuffix(".txt"): _lines(directory / name) for name in PROFILE_DOCUMENTS}
     return RecommendationProfile(mode=mode, **values)

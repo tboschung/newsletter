@@ -1,0 +1,21 @@
+[Unit]
+Description=Morning Digest signup API
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=toby
+Group=toby
+WorkingDirectory=/opt/apps/newsletter
+ExecStart=/opt/apps/newsletter/.venv/bin/python /opt/apps/newsletter/main.py serve --host 127.0.0.1 --port 8080
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/apps/newsletter/data
+
+[Install]
+WantedBy=multi-user.target

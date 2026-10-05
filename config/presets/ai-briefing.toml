@@ -1,0 +1,4 @@
+id = "ai-briefing"
+name = "AI Briefing"
+description = "The important AI news and research, filtered for signal."
+content = ["news", "technology"]

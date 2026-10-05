@@ -1,0 +1,5 @@
+id = "job-radar"
+name = "Job Radar"
+description = "A focused shortlist of matching AI and software roles."
+content = ["jobs"]
+job_profile = "cv"

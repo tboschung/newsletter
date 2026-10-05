@@ -1,8 +1,15 @@
 # Newsletter
 
-A Raspberry Pi script that collects the previous 24 hours of AI news,
-technology/research, and early-career AI/ML/data jobs; ranks and archives them;
-and emails a morning digest.
+A Raspberry Pi service that collects the previous 24 hours of AI news and jobs,
+ranks and archives them, and sends a personalized digest to each subscriber.
+
+Collection is split into two declarative engines:
+
+- `config/engines/newsletter.toml` contains news and research sources.
+- `config/engines/jobs.toml` contains job sources.
+
+Both use the same `ContentEngine`; adding, removing, reweighting, or recategorizing
+a source does not require changing the engine code.
 
 ## Setup
 
@@ -55,19 +62,65 @@ prevents the same cutoff from being delivered twice.
 
 ## Configuration and commands
 
-RSS sources are in `morning_digest/default_sources.toml`. To override them, set
-`DIGEST_SOURCES_FILE` in `/etc/newsletter.env` or pass `--sources` before the
-command. Job profiles are under `data/job_profiles`; `cv` is the default mode.
+Engine definitions are under `config/engines`. To use another
+directory, set `DIGEST_ENGINES_DIR` in `/etc/newsletter.env`; to test one engine,
+pass `--engine /path/to/engine.toml`. Job recommendation profiles remain under
+`data/job_profiles`.
 
 ```bash
 python main.py check-config
 python main.py check-config --smtp
 python main.py run
 python main.py run --dry-run
-python main.py run --recommendation-mode specification --dry-run
 python main.py run --as-of 2026-08-12T06:00:00+02:00 --dry-run
-python main.py --sources /path/to/sources.toml run --dry-run
+python main.py --engine /path/to/engine.toml run --dry-run
 ```
 
-The archive stores fetched selections, summaries, source health, rendered
-digests, and delivery state in SQLite.
+## Subscribers and personalization
+
+Each TOML file in `config/subscribers` defines one subscriber.
+Copy `default.toml`, give it a unique `id`, and choose any combination of
+`news`, `technology`, and `jobs`:
+
+```toml
+id = "alice"
+email = "alice@example.com"
+content = ["news", "technology"]
+job_profile = "cv"
+```
+
+For addresses kept outside the repository, use `email_env = "ALICE_EMAIL"`
+and define `ALICE_EMAIL` in `/etc/newsletter.env`. Set
+`DIGEST_SUBSCRIBERS_DIR` to keep all subscriber files elsewhere. A subscriber
+who includes jobs can select a different profile directory with `job_profile`.
+
+Collection runs once, after which ranking, rendering, previews, and delivery are
+isolated per subscriber. The archive stores fetched items, summaries, source
+health, rendered digests, and per-subscriber delivery state in SQLite. Existing
+single-recipient archives are migrated automatically to the `default` subscriber.
+
+## Signup API
+
+The signup page, preset catalog, and JSON API can run as one small process:
+
+```bash
+python main.py serve --host 127.0.0.1 --port 8080
+```
+
+For a persistent local service, install `deploy/morning-digest-web.service` as
+`/etc/systemd/system/morning-digest-web.service`, reload systemd, and enable it.
+Keep the full `ExecStart` command on one line.
+
+`GET /api/presets` returns the public preset catalog. `POST /api/subscribers`
+accepts an `email` and `preset_id` JSON object. Repeating a signup updates the
+existing address instead of creating a duplicate. Put the process behind an HTTPS
+reverse proxy before exposing it publicly.
+
+Public presets are TOML files in `config/presets`. Web signups are stored in the
+same SQLite database used by delivery. Each record stores a preset plus an empty
+`config_overrides` JSON object; the delivery resolver already merges validated
+`content` and `job_profile` overrides, so custom per-user configuration can be
+added later without changing the table or delivery loop.
+
+The remaining subscriber-lifecycle, confirmation, unsubscribe, custom-config,
+privacy, and operational work is documented in [`NEXT_STEPS.md`](NEXT_STEPS.md).

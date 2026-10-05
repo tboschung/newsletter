@@ -1,21 +1,18 @@
 from __future__ import annotations
 
 import json
-import logging
 import re
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
-from typing import Callable
 
 import feedparser
 import httpx
 from dateutil import parser as date_parser
 
-from .config import FeedSource
+from .config import SourceConfig
 from .models import Item
 from .text import clean_html
 
-LOG = logging.getLogger(__name__)
 AI_TERMS = ("artificial intelligence", " ai ", "machine learning", "llm", "model", "openai",
             "anthropic", "gemini", "deepmind", "agent", "neural", "inference", "nvidia")
 JOBS_CH_TERMS = ("artificial intelligence", "machine learning", "data science", "AI internship")
@@ -33,7 +30,7 @@ def _date(value: str | int | float | None) -> datetime | None:
         return None
 
 
-def fetch_feed(client: httpx.Client, source: FeedSource) -> list[Item]:
+def fetch_feed(client: httpx.Client, source: SourceConfig) -> list[Item]:
     response = client.get(source.url)
     response.raise_for_status()
     parsed = feedparser.parse(response.content)
@@ -278,28 +275,31 @@ def fetch_swiss_dev_jobs(client: httpx.Client) -> list[Item]:
     return items
 
 
-def collect_all(feeds: tuple[FeedSource, ...], result_callback: Callable[[str, bool, str], None] | None = None) -> tuple[list[Item], list[str]]:
-    items, failed = [], []
-    headers = {"User-Agent": "MorningIntelligence/0.1 (personal daily digest)"}
-    with httpx.Client(timeout=20, follow_redirects=True, headers=headers) as client:
-        collectors = [(f.name, lambda f=f: fetch_feed(client, f)) for f in feeds]
-        collectors += [("Hacker News", lambda: fetch_hacker_news(client)),
-                       ("arXiv", lambda: fetch_arxiv(client)),
-                       ("Arbeitnow", lambda: fetch_arbeitnow(client)),
-                       ("Jobicy", lambda: fetch_jobicy(client)),
-                       ("Remotive", lambda: fetch_remotive(client)),
-                       ("Remote OK", lambda: fetch_remote_ok(client)),
-                       ("SwissAIJob", lambda: fetch_swiss_ai_job(client)),
-                       ("jobs.ch", lambda: fetch_jobs_ch(client)),
-                       ("SwissDevJobs", lambda: fetch_swiss_dev_jobs(client))]
-        for name, collector in collectors:
-            try:
-                items.extend(collector())
-                if result_callback:
-                    result_callback(name, True, "")
-            except Exception as exc:  # one unavailable source must not abort the digest
-                LOG.warning("Source %s failed: %s", name, exc)
-                failed.append(name)
-                if result_callback:
-                    result_callback(name, False, str(exc))
-    return items, failed
+ADAPTERS = {
+    "hacker_news": fetch_hacker_news,
+    "arxiv": fetch_arxiv,
+    "arbeitnow": fetch_arbeitnow,
+    "jobicy": fetch_jobicy,
+    "remotive": fetch_remotive,
+    "remote_ok": fetch_remote_ok,
+    "swiss_ai_job": fetch_swiss_ai_job,
+    "jobs_ch": fetch_jobs_ch,
+    "swiss_dev_jobs": fetch_swiss_dev_jobs,
+}
+
+
+def collect_source(client: httpx.Client, source: SourceConfig) -> list[Item]:
+    """Run one configured adapter and normalize its output to the source config."""
+    if source.adapter == "rss":
+        items = fetch_feed(client, source)
+    else:
+        try:
+            collector = ADAPTERS[source.adapter]
+        except KeyError as exc:
+            raise ValueError(f"unknown collector adapter: {source.adapter}") from exc
+        items = collector(client)
+    for item in items:
+        item.source = source.name
+        item.category = source.category
+        item.score = source.weight
+    return items
