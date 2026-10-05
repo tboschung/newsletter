@@ -39,7 +39,8 @@ Send a standalone SMTP test from the repository root with:
 _scripts/send-test-email.sh recipient@example.com
 ```
 
-This sends a labelled multipart test message and does not write subscriber,
+This sends the production multipart digest layout with clearly labelled,
+deterministic mock news, research, and job content. It does not write subscriber,
 token, digest, or delivery-attempt records.
 
 ## Raspberry Pi deployment

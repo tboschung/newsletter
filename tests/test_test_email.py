@@ -1,17 +1,25 @@
 from email.message import EmailMessage
+from datetime import datetime, timezone
 
 from morning_digest import test_email
 
 
 def test_build_test_message_is_labelled_multipart():
-    message = test_email.build_test_message("sender@example.com", "reader@example.com")
+    message = test_email.build_test_message(
+        "sender@example.com", "reader@example.com",
+        now=datetime(2026, 10, 5, 6, tzinfo=timezone.utc),
+    )
     assert isinstance(message, EmailMessage)
     assert message["Subject"].startswith("[TEST]")
     assert message["To"] == "reader@example.com"
     assert message.is_multipart()
-    assert "No digest or subscriber data was changed" in message.get_body(
-        preferencelist=("plain",)
-    ).get_content()
+    plain = message.get_body(preferencelist=("plain",)).get_content()
+    html = message.get_body(preferencelist=("html",)).get_content()
+    assert "TOP AI DEVELOPMENTS" in plain
+    assert "EARLY-CAREER AI, ML & DATA JOBS" in plain
+    assert "Junior Machine Learning Engineer" in plain
+    assert "Your AI briefing" in html
+    assert "New multimodal model released" in html
 
 
 def test_test_email_sends_with_environment_credentials(tmp_path, monkeypatch):
